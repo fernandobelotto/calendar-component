@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "Ref": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp",
+      "headers": {
+        "x-ref-api-key": "ref-ff39a006553ab0a2c276"
+      }
+    },
+    "exa": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "exa-mcp-server"],
+      "env": {
+        "EXA_API_KEY": "6a441b93-29ac-4cd5-abd5-d6bde031bd8d"
+      }
+    }
+  }
+}
