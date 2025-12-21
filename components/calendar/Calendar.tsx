@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Toaster } from "sonner";
 import { CalendarProvider, useCalendar } from "./calendar-context";
 import { CalendarHeader } from "./calendar-header";
-import { MonthView, WeekView, DayView, ListView } from "./views";
+import { MonthView, WeekView, DayView, YearView, ListView } from "./views";
 import { EventModal } from "./event-modal";
 import { CalendarSkeleton } from "./calendar-skeleton";
 import {
@@ -40,6 +40,8 @@ function CalendarContent() {
         return <WeekView />;
       case "day":
         return <DayView />;
+      case "year":
+        return <YearView />;
       case "list":
         return <ListView />;
       default:

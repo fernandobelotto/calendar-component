@@ -385,7 +385,7 @@ export default function Home() {
         onDateRangeChange={handleDateRangeChange}
         config={{
           defaultView: "month",
-          use24HourFormat: true,
+          use24HourFormatByDefault: true,
           weekStartsOn: 1,
           defaultEventColor: "blue",
           monthView: {

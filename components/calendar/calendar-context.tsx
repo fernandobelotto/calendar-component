@@ -70,9 +70,21 @@ export function CalendarProvider({
   const config: Required<EventCalendarConfig> = {
     ...DEFAULT_CONFIG,
     ...userConfig,
+    dayView: {
+      ...DEFAULT_CONFIG.dayView,
+      ...userConfig?.dayView,
+    },
+    weekView: {
+      ...DEFAULT_CONFIG.weekView,
+      ...userConfig?.weekView,
+    },
     monthView: {
       ...DEFAULT_CONFIG.monthView,
       ...userConfig?.monthView,
+    },
+    yearView: {
+      ...DEFAULT_CONFIG.yearView,
+      ...userConfig?.yearView,
     },
   };
 
@@ -96,7 +108,7 @@ export function CalendarProvider({
   ]);
 
   // Settings
-  const [use24Hour, setUse24Hour] = useState(config.use24HourFormat);
+  const [use24Hour, setUse24Hour] = useState(config.use24HourFormatByDefault);
   const [isDarkMode, setIsDarkModeState] = useState(true);
 
   // Modal state
@@ -152,6 +164,10 @@ export function CalendarProvider({
         case "day":
           startDate = date;
           endDate = date;
+          break;
+        case "year":
+          startDate = new Date(date.getFullYear(), 0, 1);
+          endDate = new Date(date.getFullYear(), 11, 31);
           break;
         case "list":
           startDate = startOfMonth(date);
@@ -226,6 +242,9 @@ export function CalendarProvider({
         case "day":
           newDate = addDays(prev, 1);
           break;
+        case "year":
+          newDate = new Date(prev.getFullYear() + 1, prev.getMonth(), prev.getDate());
+          break;
         case "list":
           newDate = addMonths(prev, 1);
           break;
@@ -250,6 +269,9 @@ export function CalendarProvider({
           break;
         case "day":
           newDate = subDays(prev, 1);
+          break;
+        case "year":
+          newDate = new Date(prev.getFullYear() - 1, prev.getMonth(), prev.getDate());
           break;
         case "list":
           newDate = subMonths(prev, 1);

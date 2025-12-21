@@ -1,6 +1,8 @@
 export type EventColor = "blue" | "green" | "yellow" | "purple" | "red";
 
-export type ViewMode = "month" | "week" | "day" | "list";
+export type ViewMode = "month" | "week" | "day" | "year" | "list";
+
+export type CalendarViewType = "day" | "week" | "month" | "year";
 
 export type RecurrencePattern = "daily" | "weekly" | "monthly";
 
@@ -26,21 +28,66 @@ export type TimePreset = {
   endTime: string;
 };
 
+// Day view configuration
+export type DayViewConfig = {
+  // The type of day view to display
+  viewType?: "regular" | "resource";
+  // When true, hides the hover indicator line
+  hideHoverLine?: boolean;
+  // When true, hides the current time indicator line
+  hideTimeline?: boolean;
+  // When true, allows double-click to add event
+  enableDoubleClickToAddEvent?: boolean;
+};
+
+// Week view configuration
+export type WeekViewConfig = {
+  // The type of week view to display
+  viewType?: "regular" | "resource";
+  // When true, hides the hover indicator line
+  hideHoverLine?: boolean;
+  // When true, hides the current time indicator line
+  hideTimeline?: boolean;
+  // When true, allows double-click to switch to day view
+  enableDoubleClickToShiftViewToDaily?: boolean;
+};
+
+// Month view configuration
+export type MonthViewConfig = {
+  // When true, shows only days in current month
+  showOnlyCurrentMonth?: boolean;
+  // The type of month view ('basic' shows minimal info, 'detailed' shows more)
+  viewType?: "basic" | "detailed";
+  // When true, allows double-click to switch to week view
+  enableDoubleClickToShiftViewToWeekly?: boolean;
+  // Maximum events to show before "+N more" (custom option)
+  maxVisibleEvents?: number;
+};
+
+// Year view configuration
+export type YearViewConfig = {
+  // When true, allows double-click to switch to month view
+  enableDoubleClickToShiftViewToMonthly?: boolean;
+};
+
 // Configuration for the calendar
 export type EventCalendarConfig = {
   // Default view when calendar loads
   defaultView?: ViewMode;
   // Use 24-hour time format by default
-  use24HourFormat?: boolean;
-  // Week starts on Monday (1) or Sunday (0)
+  use24HourFormatByDefault?: boolean;
+  // Week starts on Monday (1) or Sunday (0) - custom option
   weekStartsOn?: 0 | 1;
-  // Default color for new events
+  // Default color for new events - custom option
   defaultEventColor?: EventColor;
+  // Day view settings
+  dayView?: DayViewConfig;
+  // Week view settings
+  weekView?: WeekViewConfig;
   // Month view settings
-  monthView?: {
-    // Maximum events to show before "+N more"
-    maxVisibleEvents?: number;
-  };
+  monthView?: MonthViewConfig;
+  // Year view settings
+  yearView?: YearViewConfig;
 };
 
 // Props for the EventCalendar component
@@ -195,10 +242,28 @@ export const TIME_PRESETS: TimePreset[] = [
 // Default configuration
 export const DEFAULT_CONFIG: Required<EventCalendarConfig> = {
   defaultView: "month",
-  use24HourFormat: true,
+  use24HourFormatByDefault: false,
   weekStartsOn: 1,
   defaultEventColor: "blue",
+  dayView: {
+    viewType: "regular",
+    hideHoverLine: false,
+    hideTimeline: false,
+    enableDoubleClickToAddEvent: true,
+  },
+  weekView: {
+    viewType: "regular",
+    hideHoverLine: false,
+    hideTimeline: false,
+    enableDoubleClickToShiftViewToDaily: true,
+  },
   monthView: {
+    showOnlyCurrentMonth: false,
+    viewType: "detailed",
+    enableDoubleClickToShiftViewToWeekly: true,
     maxVisibleEvents: 2,
+  },
+  yearView: {
+    enableDoubleClickToShiftViewToMonthly: true,
   },
 };

@@ -12,7 +12,7 @@ const shimmer = {
     transition: {
       repeat: Infinity,
       duration: 1.5,
-      ease: "linear",
+      ease: "linear" as const,
     },
   },
 };
@@ -170,7 +170,7 @@ export function DayViewSkeleton() {
 }
 
 type CalendarSkeletonProps = {
-  view?: "month" | "week" | "day" | "list";
+  view?: "month" | "week" | "day" | "year" | "list";
 };
 
 export function CalendarSkeleton({ view = "month" }: CalendarSkeletonProps) {
@@ -182,6 +182,7 @@ export function CalendarSkeleton({ view = "month" }: CalendarSkeletonProps) {
         {view === "month" && <MonthViewSkeleton />}
         {view === "week" && <WeekViewSkeleton />}
         {view === "day" && <DayViewSkeleton />}
+        {view === "year" && <MonthViewSkeleton />}
         {view === "list" && <ListViewSkeleton />}
       </div>
     </div>

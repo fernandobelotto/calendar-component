@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   startOfMonth,
@@ -12,13 +12,13 @@ import {
   isSameDay,
   isToday,
   format,
+  getWeek,
 } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCalendar } from "../calendar-context";
 import { EventCard, MoreEventsButton } from "../event-card";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const MAX_VISIBLE_EVENTS = 2;
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -37,7 +37,7 @@ const dayVariants = {
   visible: {
     opacity: 1,
     scale: 1,
-    transition: { type: "spring", stiffness: 300, damping: 25 },
+    transition: { type: "spring" as const, stiffness: 300, damping: 25 },
   },
 };
 
@@ -46,36 +46,63 @@ export function MonthView() {
     currentDate,
     selectedDate,
     setSelectedDate,
+    setCurrentDate,
+    setViewMode,
     getEventsForDate,
     openAddModal,
-    navigationDirection,
+    config,
   } = useCalendar();
+
+  const maxVisibleEvents = config.monthView?.maxVisibleEvents ?? 2;
+  const showOnlyCurrentMonth = config.monthView?.showOnlyCurrentMonth ?? false;
+  const viewType = config.monthView?.viewType ?? "detailed";
 
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentDate);
     const monthEnd = endOfMonth(currentDate);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: config.weekStartsOn });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: config.weekStartsOn });
 
-    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-  }, [currentDate]);
+    const allDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+    // If showOnlyCurrentMonth is true, filter to only show current month days
+    if (showOnlyCurrentMonth) {
+      return allDays.map((day) => ({
+        date: day,
+        isPlaceholder: !isSameMonth(day, currentDate),
+      }));
+    }
+
+    return allDays.map((day) => ({
+      date: day,
+      isPlaceholder: false,
+    }));
+  }, [currentDate, config.weekStartsOn, showOnlyCurrentMonth]);
 
   // Group days into weeks
   const weeks = useMemo(() => {
-    const result: Date[][] = [];
+    const result: { date: Date; isPlaceholder: boolean }[][] = [];
     for (let i = 0; i < calendarDays.length; i += 7) {
       result.push(calendarDays.slice(i, i + 7));
     }
     return result;
   }, [calendarDays]);
 
-  const handleDayClick = (day: Date) => {
+  const handleDayClick = useCallback((day: Date) => {
     setSelectedDate(day);
-  };
+  }, [setSelectedDate]);
 
-  const handleDayDoubleClick = (day: Date) => {
-    openAddModal(day);
-  };
+  const handleDayDoubleClick = useCallback(
+    (day: Date) => {
+      if (config.monthView?.enableDoubleClickToShiftViewToWeekly) {
+        setCurrentDate(day);
+        setViewMode("week");
+      } else {
+        openAddModal(day);
+      }
+    },
+    [config.monthView?.enableDoubleClickToShiftViewToWeekly, setCurrentDate, setViewMode, openAddModal]
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -101,13 +128,27 @@ export function MonthView() {
           exit="exit"
           className="flex-1 grid grid-cols-7 auto-rows-fr"
         >
-          {calendarDays.map((day, index) => {
+          {calendarDays.map(({ date: day, isPlaceholder }) => {
+            // If it's a placeholder, render an empty cell
+            if (isPlaceholder) {
+              return (
+                <motion.div
+                  key={day.toISOString()}
+                  variants={dayVariants}
+                  className="min-h-[120px] p-2 border-b border-r border-border bg-muted/10"
+                />
+              );
+            }
+
             const events = getEventsForDate(day);
-            const visibleEvents = events.slice(0, MAX_VISIBLE_EVENTS);
-            const hiddenCount = events.length - MAX_VISIBLE_EVENTS;
+            const visibleEvents = events.slice(0, maxVisibleEvents);
+            const hiddenCount = events.length - maxVisibleEvents;
             const isCurrentMonth = isSameMonth(day, currentDate);
             const isSelected = selectedDate && isSameDay(day, selectedDate);
             const isDayToday = isToday(day);
+
+            // Basic view shows minimal information
+            const isBasicView = viewType === "basic";
 
             return (
               <motion.div
@@ -139,28 +180,58 @@ export function MonthView() {
 
                 {/* Events */}
                 <div className="space-y-1">
-                  <AnimatePresence mode="popLayout">
-                    {visibleEvents.map((event, eventIndex) => (
-                      <motion.div
-                        key={event.id}
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        transition={{ delay: eventIndex * 0.05 }}
-                      >
-                        <EventCard event={event} variant="compact" />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                  {isBasicView ? (
+                    // Basic view: just show dots for events
+                    events.length > 0 && (
+                      <div className="flex gap-1 flex-wrap">
+                        {events.slice(0, 5).map((event) => (
+                          <div
+                            key={event.id}
+                            className={cn(
+                              "w-2 h-2 rounded-full",
+                              event.color === "blue" && "bg-blue-600",
+                              event.color === "green" && "bg-green-700",
+                              event.color === "yellow" && "bg-yellow-600",
+                              event.color === "purple" && "bg-purple-600",
+                              event.color === "red" && "bg-red-700"
+                            )}
+                          />
+                        ))}
+                        {events.length > 5 && (
+                          <span className="text-xs text-muted-foreground">
+                            +{events.length - 5}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    // Detailed view: show event cards
+                    <>
+                      <AnimatePresence mode="popLayout">
+                        {visibleEvents.map((event, eventIndex) => (
+                          <motion.div
+                            key={event.id}
+                            initial={{ opacity: 0, y: -5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -5 }}
+                            transition={{ delay: eventIndex * 0.05 }}
+                          >
+                            <EventCard event={event} variant="compact" />
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
 
-                  {hiddenCount > 0 && (
-                    <MoreEventsButton
-                      count={hiddenCount}
-                      onClick={() => {
-                        setSelectedDate(day);
-                        // Could open a modal or switch to day view here
-                      }}
-                    />
+                      {hiddenCount > 0 && (
+                        <MoreEventsButton
+                          count={hiddenCount}
+                          onClick={() => {
+                            setSelectedDate(day);
+                            setCurrentDate(day);
+                            setViewMode("day");
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               </motion.div>

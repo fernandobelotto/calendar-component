@@ -53,6 +53,7 @@ const VIEW_OPTIONS: { value: ViewMode; icon: React.ReactNode; label: string }[] 
   { value: "day", icon: <Columns className="h-4 w-4" />, label: "Day" },
   { value: "week", icon: <Columns className="h-4 w-4" />, label: "Week" },
   { value: "month", icon: <Grid3X3 className="h-4 w-4" />, label: "Month" },
+  { value: "year", icon: <CalendarDays className="h-4 w-4" />, label: "Year" },
 ];
 
 export function CalendarHeader() {
@@ -103,6 +104,8 @@ export function CalendarHeader() {
         return "This Week";
       case "month":
         return "This Month";
+      case "year":
+        return "This Year";
       case "list":
         return "This Month";
       default:
