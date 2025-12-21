@@ -14,6 +14,7 @@ import {
   CalendarPlus,
   Trash2,
   Loader2,
+  Sun,
 } from "lucide-react";
 import {
   Dialog,
@@ -213,6 +214,7 @@ export function EventModal() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrencePattern, setRecurrencePattern] =
     useState<RecurrencePattern>("weekly");
+  const [isAllDay, setIsAllDay] = useState(false);
 
   // Time preset carousel
   const [presetIndex, setPresetIndex] = useState(0);
@@ -232,6 +234,7 @@ export function EventModal() {
         setColor(editingEvent.color);
         setIsRecurring(editingEvent.isRecurring || false);
         setRecurrencePattern(editingEvent.recurrencePattern || "weekly");
+        setIsAllDay(editingEvent.isAllDay || false);
       } else {
         const initialDate = selectedDate || new Date();
         setTitle("");
@@ -243,6 +246,7 @@ export function EventModal() {
         setColor(config.defaultEventColor);
         setIsRecurring(false);
         setRecurrencePattern("weekly");
+        setIsAllDay(false);
       }
     }
   }, [isModalOpen, editingEvent, selectedDate, config.defaultEventColor]);
@@ -269,11 +273,12 @@ export function EventModal() {
       description: description.trim() || undefined,
       startDate: format(startDate, "yyyy-MM-dd"),
       endDate: format(endDate, "yyyy-MM-dd"),
-      startTime,
-      endTime,
+      startTime: isAllDay ? "00:00" : startTime,
+      endTime: isAllDay ? "23:59" : endTime,
       color,
       isRecurring,
       recurrencePattern: isRecurring ? recurrencePattern : undefined,
+      isAllDay,
     };
 
     try {
@@ -359,50 +364,67 @@ export function EventModal() {
               />
             </div>
 
-            {/* Time Presets */}
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => handlePresetChange("prev")}
-                disabled={isSubmitting}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex-1 flex gap-2">
-                {visiblePresets.map((preset, i) => (
-                  <Button
-                    key={preset.label}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-xs"
-                    onClick={() => applyPreset((presetIndex + i) % TIME_PRESETS.length)}
-                    disabled={isSubmitting}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
+            {/* All Day Toggle */}
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <Sun className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">All Day Event</span>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => handlePresetChange("next")}
+              <Switch
+                checked={isAllDay}
+                onCheckedChange={setIsAllDay}
                 disabled={isSubmitting}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              />
             </div>
 
+            {/* Time Presets - hidden when all day */}
+            {!isAllDay && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => handlePresetChange("prev")}
+                  disabled={isSubmitting}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="flex-1 flex gap-2">
+                  {visiblePresets.map((preset, i) => (
+                    <Button
+                      key={preset.label}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => applyPreset((presetIndex + i) % TIME_PRESETS.length)}
+                      disabled={isSubmitting}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => handlePresetChange("next")}
+                  disabled={isSubmitting}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {/* Date & Time Row */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className={cn("grid gap-4", isAllDay ? "grid-cols-2" : "grid-cols-2")}>
               {/* Start Date */}
               <div className="space-y-2">
-                <label className="text-sm font-medium">Date</label>
+                <label className="text-sm font-medium">
+                  {isAllDay ? "Start Date" : "Date"}
+                </label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -426,11 +448,13 @@ export function EventModal() {
                 </Popover>
               </div>
 
-              {/* Start Time */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Start Time</label>
-                <TimePicker value={startTime} onChange={setStartTime} />
-              </div>
+              {/* Start Time - hidden when all day */}
+              {!isAllDay && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Start Time</label>
+                  <TimePicker value={startTime} onChange={setStartTime} />
+                </div>
+              )}
 
               {/* End Date */}
               <div className="space-y-2">
@@ -457,11 +481,13 @@ export function EventModal() {
                 </Popover>
               </div>
 
-              {/* End Time */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">End Time</label>
-                <TimePicker value={endTime} onChange={setEndTime} />
-              </div>
+              {/* End Time - hidden when all day */}
+              {!isAllDay && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">End Time</label>
+                  <TimePicker value={endTime} onChange={setEndTime} />
+                </div>
+              )}
             </div>
 
             {/* Recurring Toggle */}

@@ -17,6 +17,7 @@ export type CalendarEvent = {
   color: EventColor;
   isRecurring?: boolean;
   recurrencePattern?: RecurrencePattern;
+  isAllDay?: boolean;
 };
 
 // Type for creating a new event (without id)
@@ -153,6 +154,12 @@ export type CalendarContextValue = {
   setUse24Hour: (value: boolean) => void;
   isDarkMode: boolean;
   setIsDarkMode: (value: boolean) => void;
+
+  // Day view settings
+  dayViewType: "regular" | "resource";
+  setDayViewType: (type: "regular" | "resource") => void;
+  showDayTimeline: boolean;
+  setShowDayTimeline: (show: boolean) => void;
 
   // Modal state
   isModalOpen: boolean;

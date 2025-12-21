@@ -111,6 +111,23 @@ export function CalendarProvider({
   const [use24Hour, setUse24Hour] = useState(config.use24HourFormatByDefault);
   const [isDarkMode, setIsDarkModeState] = useState(true);
 
+  // Day view settings
+  const [dayViewType, setDayViewType] = useState<"regular" | "resource">(
+    config.dayView.viewType ?? "regular"
+  );
+  const [showDayTimeline, setShowDayTimeline] = useState(
+    !config.dayView.hideTimeline
+  );
+
+  // Sync day view settings with config when it changes
+  useEffect(() => {
+    setDayViewType(config.dayView.viewType ?? "regular");
+  }, [config.dayView.viewType]);
+
+  useEffect(() => {
+    setShowDayTimeline(!config.dayView.hideTimeline);
+  }, [config.dayView.hideTimeline]);
+
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
@@ -441,6 +458,10 @@ export function CalendarProvider({
     setUse24Hour,
     isDarkMode,
     setIsDarkMode,
+    dayViewType,
+    setDayViewType,
+    showDayTimeline,
+    setShowDayTimeline,
     isModalOpen,
     setIsModalOpen,
     editingEvent,

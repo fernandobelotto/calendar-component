@@ -20,6 +20,7 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +30,14 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useCalendar } from "./calendar-context";
 import { EventColor, EVENT_COLORS, ViewMode } from "./types";
@@ -73,12 +82,17 @@ export function CalendarHeader() {
     activeFilters,
     toggleFilter,
     openAddModal,
+    dayViewType,
+    setDayViewType,
+    showDayTimeline,
+    setShowDayTimeline,
   } = useCalendar();
 
   const [monthSearch, setMonthSearch] = useState("");
   const [isMonthOpen, setIsMonthOpen] = useState(false);
   const [isYearOpen, setIsYearOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const currentMonth = getMonth(currentDate);
   const currentYear = getYear(currentDate);
@@ -357,6 +371,52 @@ export function CalendarHeader() {
             <CalendarDays className="h-4 w-4" />
             {getViewLabel()}
           </Button>
+
+          {/* Day View Settings (only visible in day view) */}
+          {viewMode === "day" && (
+            <Popover open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[220px] p-4" align="end">
+                <div className="space-y-4">
+                  {/* Show Timeline Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Show Timeline</span>
+                    <Switch
+                      checked={showDayTimeline}
+                      onCheckedChange={setShowDayTimeline}
+                    />
+                  </div>
+
+                  {/* View Type Selector */}
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">View Type</span>
+                    <Select
+                      value={dayViewType}
+                      onValueChange={(value: "regular" | "resource") =>
+                        setDayViewType(value)
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="regular">Regular</SelectItem>
+                        <SelectItem value="resource">Resource</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           {/* View Mode Toggle Group */}
           <div className="flex items-center bg-muted rounded-lg p-1">
