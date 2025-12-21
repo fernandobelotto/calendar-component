@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { format, parseISO, addHours, set } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   Calendar as CalendarIcon,
-  X,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -14,6 +13,7 @@ import {
   Repeat,
   CalendarPlus,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import {
   Dialog,
@@ -45,6 +45,7 @@ import {
   EVENT_COLORS,
   TIME_PRESETS,
   RecurrencePattern,
+  NewCalendarEvent,
 } from "./types";
 
 // Simple inline mini calendar for date picking
@@ -193,10 +194,12 @@ export function EventModal() {
     isModalOpen,
     closeModal,
     editingEvent,
-    addEvent,
-    updateEvent,
-    deleteEvent,
+    handleEventAdd,
+    handleEventUpdate,
+    handleEventDelete,
     selectedDate,
+    isSubmitting,
+    config,
   } = useCalendar();
 
   // Form state
@@ -206,7 +209,7 @@ export function EventModal() {
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
-  const [color, setColor] = useState<EventColor>("blue");
+  const [color, setColor] = useState<EventColor>(config.defaultEventColor);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrencePattern, setRecurrencePattern] =
     useState<RecurrencePattern>("weekly");
@@ -237,12 +240,12 @@ export function EventModal() {
         setEndDate(initialDate);
         setStartTime("09:00");
         setEndTime("10:00");
-        setColor("blue");
+        setColor(config.defaultEventColor);
         setIsRecurring(false);
         setRecurrencePattern("weekly");
       }
     }
-  }, [isModalOpen, editingEvent, selectedDate]);
+  }, [isModalOpen, editingEvent, selectedDate, config.defaultEventColor]);
 
   const handlePresetChange = (direction: "prev" | "next") => {
     const newIndex =
@@ -258,11 +261,10 @@ export function EventModal() {
     setEndTime(preset.endTime);
   };
 
-  const handleSubmit = () => {
-    if (!title.trim()) return;
+  const handleSubmit = async () => {
+    if (!title.trim() || isSubmitting) return;
 
-    const eventData: CalendarEvent = {
-      id: editingEvent?.id || crypto.randomUUID(),
+    const eventData: NewCalendarEvent = {
       title: title.trim(),
       description: description.trim() || undefined,
       startDate: format(startDate, "yyyy-MM-dd"),
@@ -274,19 +276,29 @@ export function EventModal() {
       recurrencePattern: isRecurring ? recurrencePattern : undefined,
     };
 
-    if (isEditing) {
-      updateEvent(eventData);
-    } else {
-      addEvent(eventData);
+    try {
+      if (isEditing && editingEvent) {
+        await handleEventUpdate({
+          ...eventData,
+          id: editingEvent.id,
+        });
+      } else {
+        await handleEventAdd(eventData);
+      }
+    } catch (err) {
+      // Error is handled by the hook/context with toast
+      console.error("Event operation failed:", err);
     }
-
-    closeModal();
   };
 
-  const handleDelete = () => {
-    if (editingEvent) {
-      deleteEvent(editingEvent.id);
-      closeModal();
+  const handleDelete = async () => {
+    if (!editingEvent || isSubmitting) return;
+
+    try {
+      await handleEventDelete(editingEvent.id);
+    } catch (err) {
+      // Error is handled by the hook/context with toast
+      console.error("Delete failed:", err);
     }
   };
 
@@ -300,7 +312,7 @@ export function EventModal() {
   }, [presetIndex]);
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
+    <Dialog open={isModalOpen} onOpenChange={(open) => !open && !isSubmitting && closeModal()}>
       <DialogContent className="sm:max-w-[500px] p-0 gap-0 overflow-hidden">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -331,6 +343,7 @@ export function EventModal() {
                 placeholder="Event Title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                disabled={isSubmitting}
               />
             </div>
 
@@ -341,6 +354,7 @@ export function EventModal() {
                 placeholder="Description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                disabled={isSubmitting}
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
               />
             </div>
@@ -353,6 +367,7 @@ export function EventModal() {
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => handlePresetChange("prev")}
+                disabled={isSubmitting}
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -365,6 +380,7 @@ export function EventModal() {
                     size="sm"
                     className="flex-1 text-xs"
                     onClick={() => applyPreset((presetIndex + i) % TIME_PRESETS.length)}
+                    disabled={isSubmitting}
                   >
                     {preset.label}
                   </Button>
@@ -376,6 +392,7 @@ export function EventModal() {
                 size="icon"
                 className="h-8 w-8 shrink-0"
                 onClick={() => handlePresetChange("next")}
+                disabled={isSubmitting}
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -391,6 +408,7 @@ export function EventModal() {
                     <Button
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
+                      disabled={isSubmitting}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {format(startDate, "MMMM do, yyyy")}
@@ -422,6 +440,7 @@ export function EventModal() {
                     <Button
                       variant="outline"
                       className="w-full justify-start text-left font-normal"
+                      disabled={isSubmitting}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {format(endDate, "MMMM do, yyyy")}
@@ -451,7 +470,11 @@ export function EventModal() {
                 <Repeat className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium">Repeating Event?</span>
               </div>
-              <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+              <Switch
+                checked={isRecurring}
+                onCheckedChange={setIsRecurring}
+                disabled={isSubmitting}
+              />
             </div>
 
             {/* Recurrence Pattern */}
@@ -468,6 +491,7 @@ export function EventModal() {
                     onValueChange={(v) =>
                       setRecurrencePattern(v as RecurrencePattern)
                     }
+                    disabled={isSubmitting}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select pattern" />
@@ -485,7 +509,11 @@ export function EventModal() {
             {/* Color Picker */}
             <div className="space-y-2">
               <label className="text-sm font-medium">Event Color</label>
-              <Select value={color} onValueChange={(v) => setColor(v as EventColor)}>
+              <Select
+                value={color}
+                onValueChange={(v) => setColor(v as EventColor)}
+                disabled={isSubmitting}
+              >
                 <SelectTrigger>
                   <SelectValue>
                     <div className="flex items-center gap-2">
@@ -524,17 +552,32 @@ export function EventModal() {
                   type="button"
                   variant="destructive"
                   onClick={handleDelete}
+                  disabled={isSubmitting}
                   className="gap-2"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                   Delete
                 </Button>
               )}
               <div className="flex-1" />
-              <Button type="button" variant="outline" onClick={closeModal}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={closeModal}
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
-              <Button type="button" onClick={handleSubmit}>
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting || !title.trim()}
+              >
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEditing ? "Update" : "Save"}
               </Button>
             </div>

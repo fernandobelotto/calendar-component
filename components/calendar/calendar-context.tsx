@@ -5,6 +5,8 @@ import {
   useContext,
   useState,
   useCallback,
+  useEffect,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -22,74 +24,58 @@ import {
   isWithinInterval,
   parseISO,
 } from "date-fns";
-import { CalendarEvent, ViewMode, EventColor } from "./types";
-import { useCalendarStorage } from "./use-calendar-storage";
-
-type CalendarContextValue = {
-  // Date state
-  currentDate: Date;
-  setCurrentDate: (date: Date) => void;
-  selectedDate: Date | null;
-  setSelectedDate: (date: Date | null) => void;
-
-  // Navigation
-  goToToday: () => void;
-  goToNextPeriod: () => void;
-  goToPrevPeriod: () => void;
-  goToMonth: (month: number) => void;
-  goToYear: (year: number) => void;
-
-  // View state
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-
-  // Events
-  events: CalendarEvent[];
-  addEvent: (event: CalendarEvent) => void;
-  updateEvent: (event: CalendarEvent) => void;
-  deleteEvent: (eventId: string) => void;
-  getEventsForDate: (date: Date) => CalendarEvent[];
-  getEventsForDateRange: (start: Date, end: Date) => CalendarEvent[];
-
-  // Filtering
-  activeFilters: EventColor[];
-  setActiveFilters: (filters: EventColor[]) => void;
-  toggleFilter: (color: EventColor) => void;
-
-  // Settings
-  use24Hour: boolean;
-  setUse24Hour: (value: boolean) => void;
-  isDarkMode: boolean;
-  setIsDarkMode: (value: boolean) => void;
-
-  // Modal state
-  isModalOpen: boolean;
-  setIsModalOpen: (open: boolean) => void;
-  editingEvent: CalendarEvent | null;
-  setEditingEvent: (event: CalendarEvent | null) => void;
-  openAddModal: (date?: Date) => void;
-  openEditModal: (event: CalendarEvent) => void;
-  closeModal: () => void;
-
-  // Navigation direction for animations
-  navigationDirection: "forward" | "backward" | null;
-
-  // Search
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-};
+import {
+  CalendarEvent,
+  CalendarContextValue,
+  ViewMode,
+  EventColor,
+  NewCalendarEvent,
+  EventCalendarConfig,
+  DEFAULT_CONFIG,
+} from "./types";
 
 const CalendarContext = createContext<CalendarContextValue | null>(null);
 
 type CalendarProviderProps = {
   children: ReactNode;
-  initialEvents?: CalendarEvent[];
+  // Event data from parent
+  events: CalendarEvent[];
+  // Loading state
+  isLoading?: boolean;
+  // Event handlers
+  onEventAdd: (event: NewCalendarEvent) => Promise<void>;
+  onEventUpdate: (event: CalendarEvent) => Promise<void>;
+  onEventDelete: (eventId: string) => Promise<void>;
+  // Date range change handler
+  onDateRangeChange?: (args: {
+    startDate: Date;
+    endDate: Date;
+    signal?: AbortSignal;
+  }) => Promise<void>;
+  // Configuration
+  config?: EventCalendarConfig;
 };
 
 export function CalendarProvider({
   children,
-  initialEvents = [],
+  events,
+  isLoading = false,
+  onEventAdd,
+  onEventUpdate,
+  onEventDelete,
+  onDateRangeChange,
+  config: userConfig,
 }: CalendarProviderProps) {
+  // Merge config with defaults
+  const config: Required<EventCalendarConfig> = {
+    ...DEFAULT_CONFIG,
+    ...userConfig,
+    monthView: {
+      ...DEFAULT_CONFIG.monthView,
+      ...userConfig?.monthView,
+    },
+  };
+
   // Date state
   const [currentDate, setCurrentDateState] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
@@ -98,11 +84,7 @@ export function CalendarProvider({
   >(null);
 
   // View state
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
-
-  // Storage
-  const { events, addEvent, updateEvent, deleteEvent, isLoaded } =
-    useCalendarStorage({ initialEvents });
+  const [viewMode, setViewModeState] = useState<ViewMode>(config.defaultView);
 
   // Filtering
   const [activeFilters, setActiveFilters] = useState<EventColor[]>([
@@ -114,7 +96,7 @@ export function CalendarProvider({
   ]);
 
   // Settings
-  const [use24Hour, setUse24Hour] = useState(true);
+  const [use24Hour, setUse24Hour] = useState(config.use24HourFormat);
   const [isDarkMode, setIsDarkModeState] = useState(true);
 
   // Modal state
@@ -122,8 +104,14 @@ export function CalendarProvider({
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [modalInitialDate, setModalInitialDate] = useState<Date | null>(null);
 
+  // Submitting state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Search
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Abort controller for date range changes
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Dark mode effect
   const setIsDarkMode = useCallback((value: boolean) => {
@@ -131,6 +119,70 @@ export function CalendarProvider({
     if (typeof document !== "undefined") {
       document.documentElement.classList.toggle("dark", value);
     }
+  }, []);
+
+  // Initialize dark mode
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.add("dark");
+    }
+  }, []);
+
+  // Calculate date range based on view and call onDateRangeChange
+  const triggerDateRangeChange = useCallback(
+    async (date: Date, view: ViewMode) => {
+      if (!onDateRangeChange) return;
+
+      // Abort previous request
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = new AbortController();
+
+      let startDate: Date;
+      let endDate: Date;
+
+      switch (view) {
+        case "month":
+          startDate = startOfWeek(startOfMonth(date), { weekStartsOn: config.weekStartsOn });
+          endDate = endOfWeek(endOfMonth(date), { weekStartsOn: config.weekStartsOn });
+          break;
+        case "week":
+          startDate = startOfWeek(date, { weekStartsOn: config.weekStartsOn });
+          endDate = endOfWeek(date, { weekStartsOn: config.weekStartsOn });
+          break;
+        case "day":
+          startDate = date;
+          endDate = date;
+          break;
+        case "list":
+          startDate = startOfMonth(date);
+          endDate = endOfMonth(date);
+          break;
+        default:
+          startDate = startOfMonth(date);
+          endDate = endOfMonth(date);
+      }
+
+      try {
+        await onDateRangeChange({
+          startDate,
+          endDate,
+          signal: abortControllerRef.current.signal,
+        });
+      } catch (err) {
+        // Ignore abort errors
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        throw err;
+      }
+    },
+    [onDateRangeChange, config.weekStartsOn]
+  );
+
+  // Initial date range fetch
+  useEffect(() => {
+    triggerDateRangeChange(currentDate, viewMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Set date with direction tracking
@@ -141,66 +193,100 @@ export function CalendarProvider({
     []
   );
 
+  // Set view mode and trigger date range change
+  const setViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewModeState(mode);
+      setNavigationDirection(null);
+      triggerDateRangeChange(currentDate, mode);
+    },
+    [currentDate, triggerDateRangeChange]
+  );
+
   // Navigation functions
   const goToToday = useCallback(() => {
+    const today = new Date();
     setNavigationDirection(null);
-    setCurrentDateState(new Date());
-    setSelectedDate(new Date());
-  }, []);
+    setCurrentDateState(today);
+    setSelectedDate(today);
+    triggerDateRangeChange(today, viewMode);
+  }, [viewMode, triggerDateRangeChange]);
 
   const goToNextPeriod = useCallback(() => {
     setNavigationDirection("forward");
     setCurrentDateState((prev) => {
+      let newDate: Date;
       switch (viewMode) {
         case "month":
-          return addMonths(prev, 1);
+          newDate = addMonths(prev, 1);
+          break;
         case "week":
-          return addWeeks(prev, 1);
+          newDate = addWeeks(prev, 1);
+          break;
         case "day":
-          return addDays(prev, 1);
+          newDate = addDays(prev, 1);
+          break;
         case "list":
-          return addMonths(prev, 1);
+          newDate = addMonths(prev, 1);
+          break;
         default:
-          return prev;
+          newDate = prev;
       }
+      triggerDateRangeChange(newDate, viewMode);
+      return newDate;
     });
-  }, [viewMode]);
+  }, [viewMode, triggerDateRangeChange]);
 
   const goToPrevPeriod = useCallback(() => {
     setNavigationDirection("backward");
     setCurrentDateState((prev) => {
+      let newDate: Date;
       switch (viewMode) {
         case "month":
-          return subMonths(prev, 1);
+          newDate = subMonths(prev, 1);
+          break;
         case "week":
-          return subWeeks(prev, 1);
+          newDate = subWeeks(prev, 1);
+          break;
         case "day":
-          return subDays(prev, 1);
+          newDate = subDays(prev, 1);
+          break;
         case "list":
-          return subMonths(prev, 1);
+          newDate = subMonths(prev, 1);
+          break;
         default:
-          return prev;
+          newDate = prev;
       }
-    });
-  }, [viewMode]);
-
-  const goToMonth = useCallback((month: number) => {
-    setNavigationDirection(null);
-    setCurrentDateState((prev) => {
-      const newDate = new Date(prev);
-      newDate.setMonth(month);
+      triggerDateRangeChange(newDate, viewMode);
       return newDate;
     });
-  }, []);
+  }, [viewMode, triggerDateRangeChange]);
 
-  const goToYear = useCallback((year: number) => {
-    setNavigationDirection(null);
-    setCurrentDateState((prev) => {
-      const newDate = new Date(prev);
-      newDate.setFullYear(year);
-      return newDate;
-    });
-  }, []);
+  const goToMonth = useCallback(
+    (month: number) => {
+      setNavigationDirection(null);
+      setCurrentDateState((prev) => {
+        const newDate = new Date(prev);
+        newDate.setMonth(month);
+        triggerDateRangeChange(newDate, viewMode);
+        return newDate;
+      });
+    },
+    [viewMode, triggerDateRangeChange]
+  );
+
+  const goToYear = useCallback(
+    (year: number) => {
+      setNavigationDirection(null);
+      setCurrentDateState((prev) => {
+        const newDate = new Date(prev);
+        newDate.setFullYear(year);
+        triggerDateRangeChange(newDate, viewMode);
+        return newDate;
+      });
+    },
+    [viewMode, triggerDateRangeChange]
+  );
 
   // Event filtering
   const toggleFilter = useCallback((color: EventColor) => {
@@ -248,6 +334,46 @@ export function CalendarProvider({
     [events, activeFilters]
   );
 
+  // Event handlers that call external props
+  const handleEventAdd = useCallback(
+    async (event: NewCalendarEvent) => {
+      setIsSubmitting(true);
+      try {
+        await onEventAdd(event);
+        closeModal();
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [onEventAdd]
+  );
+
+  const handleEventUpdate = useCallback(
+    async (event: CalendarEvent) => {
+      setIsSubmitting(true);
+      try {
+        await onEventUpdate(event);
+        closeModal();
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [onEventUpdate]
+  );
+
+  const handleEventDelete = useCallback(
+    async (eventId: string) => {
+      setIsSubmitting(true);
+      try {
+        await onEventDelete(eventId);
+        closeModal();
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [onEventDelete]
+  );
+
   // Modal functions
   const openAddModal = useCallback((date?: Date) => {
     setEditingEvent(null);
@@ -279,11 +405,13 @@ export function CalendarProvider({
     viewMode,
     setViewMode,
     events,
-    addEvent,
-    updateEvent,
-    deleteEvent,
     getEventsForDate,
     getEventsForDateRange,
+    handleEventAdd,
+    handleEventUpdate,
+    handleEventDelete,
+    isLoading,
+    isSubmitting,
     activeFilters,
     setActiveFilters,
     toggleFilter,
@@ -301,6 +429,7 @@ export function CalendarProvider({
     navigationDirection,
     searchQuery,
     setSearchQuery,
+    config,
   };
 
   return (
