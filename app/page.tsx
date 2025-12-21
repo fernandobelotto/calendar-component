@@ -1,6 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { EventCalendar, useEventCalendar, CalendarEvent, NewCalendarEvent } from "@/components/calendar";
+import type { MonthViewConfig, WeekViewConfig, DayViewConfig, YearViewConfig } from "@/components/calendar/types";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // Sample events for demo
 const SAMPLE_EVENTS: CalendarEvent[] = [
@@ -301,7 +311,68 @@ const SAMPLE_EVENTS: CalendarEvent[] = [
 // Simulate API delay
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Latency options for the API simulation dropdown
+const LATENCY_OPTIONS = [
+  { label: "No delay", value: 0 },
+  { label: "500ms", value: 500 },
+  { label: "1 second", value: 1000 },
+  { label: "2 seconds", value: 2000 },
+  { label: "3 seconds", value: 3000 },
+];
+
+// Debounce options
+const DEBOUNCE_OPTIONS = [
+  { label: "No debounce", value: 0 },
+  { label: "100ms", value: 100 },
+  { label: "300ms", value: 300 },
+  { label: "500ms", value: 500 },
+];
+
+// Language options
+const LANGUAGE_OPTIONS = [
+  { label: "English", value: "en" },
+  { label: "Spanish", value: "es" },
+  { label: "French", value: "fr" },
+  { label: "German", value: "de" },
+  { label: "Portuguese", value: "pt" },
+];
+
 export default function Home() {
+  // Configuration state for Month View
+  const [monthConfig, setMonthConfig] = useState<MonthViewConfig>({
+    showOnlyCurrentMonth: true,
+    viewType: "detailed",
+    enableDoubleClickToShiftViewToWeekly: false,
+    maxVisibleEvents: 2,
+  });
+
+  // Configuration state for Week View
+  const [weekConfig, setWeekConfig] = useState<WeekViewConfig>({
+    viewType: "regular",
+    hideHoverLine: false,
+    hideTimeline: false,
+    enableDoubleClickToShiftViewToDaily: false,
+  });
+
+  // Configuration state for Day View
+  const [dayConfig, setDayConfig] = useState<DayViewConfig>({
+    viewType: "resource",
+    hideHoverLine: false,
+    hideTimeline: false,
+    enableDoubleClickToAddEvent: false,
+  });
+
+  // Configuration state for Year View
+  const [yearConfig, setYearConfig] = useState<YearViewConfig>({
+    enableDoubleClickToShiftViewToMonthly: false,
+  });
+
+  // Demo/API simulation settings
+  const [locale, setLocale] = useState("en");
+  const [allowRetry, setAllowRetry] = useState(true);
+  const [apiLatency, setApiLatency] = useState<number>(0);
+  const [debounceTime, setDebounceTime] = useState<number>(0);
+
   // Use the hook for managing events with optimistic updates
   const {
     events,
@@ -315,8 +386,10 @@ export default function Home() {
 
     // Called when a new event is created
     onEventAdd: async (event: NewCalendarEvent) => {
-      // Simulate API call
-      await delay(500);
+      // Simulate API call with configurable latency
+      if (apiLatency > 0) {
+        await delay(apiLatency);
+      }
 
       // In a real app, you'd call your API here:
       // const response = await fetch('/api/events', {
@@ -335,8 +408,10 @@ export default function Home() {
 
     // Called when an event is updated
     onEventUpdate: async (event: CalendarEvent) => {
-      // Simulate API call
-      await delay(500);
+      // Simulate API call with configurable latency
+      if (apiLatency > 0) {
+        await delay(apiLatency);
+      }
 
       // In a real app:
       // await fetch(`/api/events/${event.id}`, {
@@ -349,8 +424,10 @@ export default function Home() {
 
     // Called when an event is deleted
     onEventDelete: async (eventId: string) => {
-      // Simulate API call
-      await delay(500);
+      // Simulate API call with configurable latency
+      if (apiLatency > 0) {
+        await delay(apiLatency);
+      }
 
       // In a real app:
       // await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
@@ -358,8 +435,10 @@ export default function Home() {
 
     // Called when the visible date range changes (navigating months, etc.)
     onDateRangeChange: async ({ startDate, endDate, signal }) => {
-      // Simulate API call to fetch events for this date range
-      await delay(300);
+      // Simulate API call with configurable latency
+      if (apiLatency > 0) {
+        await delay(apiLatency);
+      }
 
       // In a real app, you'd fetch events from your API:
       // const response = await fetch(
@@ -388,11 +467,322 @@ export default function Home() {
           use24HourFormatByDefault: true,
           weekStartsOn: 1,
           defaultEventColor: "blue",
-          monthView: {
-            maxVisibleEvents: 2,
-          },
+          monthView: monthConfig,
+          weekView: weekConfig,
+          dayView: dayConfig,
+          yearView: yearConfig,
         }}
       />
+
+      {/* Configuration Panel */}
+      <div className="max-w-[1400px] mx-auto px-6 pb-6">
+        <div className="bg-card border border-border rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-foreground mb-6">
+            Calendar Configuration
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Language & Localization */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">
+                Language &amp; Localization
+              </h3>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    Select Language
+                  </label>
+                  <Select value={locale} onValueChange={setLocale}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Month View */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">Month View</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Show only current month
+                  </span>
+                  <Switch
+                    checked={monthConfig.showOnlyCurrentMonth}
+                    onCheckedChange={(checked) =>
+                      setMonthConfig((prev) => ({
+                        ...prev,
+                        showOnlyCurrentMonth: checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Double-click for weekly view
+                  </span>
+                  <Switch
+                    checked={monthConfig.enableDoubleClickToShiftViewToWeekly}
+                    onCheckedChange={(checked) =>
+                      setMonthConfig((prev) => ({
+                        ...prev,
+                        enableDoubleClickToShiftViewToWeekly: checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    View Type
+                  </label>
+                  <Select
+                    value={monthConfig.viewType}
+                    onValueChange={(value: "basic" | "detailed") =>
+                      setMonthConfig((prev) => ({ ...prev, viewType: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="detailed">Detailed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Week View */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">Week View</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Show hover line
+                  </span>
+                  <Switch
+                    checked={!weekConfig.hideHoverLine}
+                    onCheckedChange={(checked) =>
+                      setWeekConfig((prev) => ({
+                        ...prev,
+                        hideHoverLine: !checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Double-click for daily view
+                  </span>
+                  <Switch
+                    checked={weekConfig.enableDoubleClickToShiftViewToDaily}
+                    onCheckedChange={(checked) =>
+                      setWeekConfig((prev) => ({
+                        ...prev,
+                        enableDoubleClickToShiftViewToDaily: checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Show timeline
+                  </span>
+                  <Switch
+                    checked={!weekConfig.hideTimeline}
+                    onCheckedChange={(checked) =>
+                      setWeekConfig((prev) => ({
+                        ...prev,
+                        hideTimeline: !checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    View Type
+                  </label>
+                  <Select
+                    value={weekConfig.viewType}
+                    onValueChange={(value: "regular" | "resource") =>
+                      setWeekConfig((prev) => ({ ...prev, viewType: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Regular</SelectItem>
+                      <SelectItem value="resource">Resource</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Day View */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">Day View</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Show hover line
+                  </span>
+                  <Switch
+                    checked={!dayConfig.hideHoverLine}
+                    onCheckedChange={(checked) =>
+                      setDayConfig((prev) => ({
+                        ...prev,
+                        hideHoverLine: !checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Double-click to add event
+                  </span>
+                  <Switch
+                    checked={dayConfig.enableDoubleClickToAddEvent}
+                    onCheckedChange={(checked) =>
+                      setDayConfig((prev) => ({
+                        ...prev,
+                        enableDoubleClickToAddEvent: checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Show timeline
+                  </span>
+                  <Switch
+                    checked={!dayConfig.hideTimeline}
+                    onCheckedChange={(checked) =>
+                      setDayConfig((prev) => ({
+                        ...prev,
+                        hideTimeline: !checked,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    View Type
+                  </label>
+                  <Select
+                    value={dayConfig.viewType}
+                    onValueChange={(value: "regular" | "resource") =>
+                      setDayConfig((prev) => ({ ...prev, viewType: value }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Regular</SelectItem>
+                      <SelectItem value="resource">Resource</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Year View */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">Year View</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Double-click for monthly view
+                  </span>
+                  <Switch
+                    checked={yearConfig.enableDoubleClickToShiftViewToMonthly}
+                    onCheckedChange={(checked) =>
+                      setYearConfig((prev) => ({
+                        ...prev,
+                        enableDoubleClickToShiftViewToMonthly: checked,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Event Settings */}
+            <div className="bg-background/50 rounded-lg p-4 space-y-4">
+              <h3 className="font-medium text-foreground">Event Settings</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Allow user retry after error
+                  </span>
+                  <Switch
+                    checked={allowRetry}
+                    onCheckedChange={setAllowRetry}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    API Latency Simulation
+                  </label>
+                  <Select
+                    value={apiLatency.toString()}
+                    onValueChange={(value) => setApiLatency(Number(value))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LATENCY_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value.toString()}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm text-muted-foreground">
+                    Debounce Time
+                  </label>
+                  <Select
+                    value={debounceTime.toString()}
+                    onValueChange={(value) => setDebounceTime(Number(value))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DEBOUNCE_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value.toString()}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   );
 }

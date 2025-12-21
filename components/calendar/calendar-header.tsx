@@ -277,15 +277,25 @@ export function CalendarHeader() {
 
         {/* Right side - Controls */}
         <div className="flex items-center gap-2">
-          {/* 24h Toggle */}
+          {/* 12h/24h Toggle */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setUse24Hour(!use24Hour)}
-            className={cn("h-9 gap-2", use24Hour && "bg-accent")}
+            className={cn("h-9 gap-2 overflow-hidden", use24Hour && "bg-accent")}
           >
             <Clock className="h-4 w-4" />
-            24h
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span
+                key={use24Hour ? "24h" : "12h"}
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -20, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+              >
+                {use24Hour ? "24h" : "12h"}
+              </motion.span>
+            </AnimatePresence>
           </Button>
 
           {/* Filter */}
