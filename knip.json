@@ -5,3 +5,4 @@
   "ignore": ["**/*.d.ts", "components/ui/**"],
   "ignoreDependencies": ["tw-animate-css", "tailwindcss"]
 }
+

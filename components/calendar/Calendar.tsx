@@ -7,11 +7,11 @@ import { CalendarHeader } from "./calendar-header";
 import { MonthView, WeekView, DayView, YearView, ListView } from "./views";
 import { EventModal } from "./event-modal";
 import { CalendarSkeleton } from "./calendar-skeleton";
+import { CalendarStoreProvider } from "./store";
 import {
-  CalendarEvent,
-  NewCalendarEvent,
   EventCalendarConfig,
   EventCalendarProps,
+  DEFAULT_CONFIG,
 } from "./types";
 
 const viewTransitionVariants = {
@@ -80,6 +80,32 @@ function CalendarContent() {
   );
 }
 
+// Helper to merge user config with defaults
+function mergeConfig(
+  userConfig?: EventCalendarConfig
+): Required<EventCalendarConfig> {
+  return {
+    ...DEFAULT_CONFIG,
+    ...userConfig,
+    dayView: {
+      ...DEFAULT_CONFIG.dayView,
+      ...userConfig?.dayView,
+    },
+    weekView: {
+      ...DEFAULT_CONFIG.weekView,
+      ...userConfig?.weekView,
+    },
+    monthView: {
+      ...DEFAULT_CONFIG.monthView,
+      ...userConfig?.monthView,
+    },
+    yearView: {
+      ...DEFAULT_CONFIG.yearView,
+      ...userConfig?.yearView,
+    },
+  };
+}
+
 export function EventCalendar({
   events,
   isLoading = false,
@@ -87,8 +113,11 @@ export function EventCalendar({
   onEventUpdate,
   onEventDelete,
   onDateRangeChange,
-  config,
+  config: userConfig,
 }: EventCalendarProps) {
+  // Merge config with defaults
+  const config = mergeConfig(userConfig);
+
   return (
     <>
       <Toaster
@@ -97,17 +126,19 @@ export function EventCalendar({
           className: "dark:bg-card dark:text-foreground dark:border-border",
         }}
       />
-      <CalendarProvider
-        events={events}
-        isLoading={isLoading}
-        onEventAdd={onEventAdd}
-        onEventUpdate={onEventUpdate}
-        onEventDelete={onEventDelete}
-        onDateRangeChange={onDateRangeChange}
-        config={config}
-      >
-        <CalendarContent />
-      </CalendarProvider>
+      <CalendarStoreProvider config={config}>
+        <CalendarProvider
+          events={events}
+          isLoading={isLoading}
+          onEventAdd={onEventAdd}
+          onEventUpdate={onEventUpdate}
+          onEventDelete={onEventDelete}
+          onDateRangeChange={onDateRangeChange}
+          config={config}
+        >
+          <CalendarContent />
+        </CalendarProvider>
+      </CalendarStoreProvider>
     </>
   );
 }

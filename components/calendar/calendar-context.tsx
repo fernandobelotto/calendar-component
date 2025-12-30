@@ -3,10 +3,10 @@
 import {
   createContext,
   useContext,
-  useState,
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   ReactNode,
 } from "react";
 import {
@@ -31,8 +31,31 @@ import {
   EventColor,
   NewCalendarEvent,
   EventCalendarConfig,
-  DEFAULT_CONFIG,
 } from "./types";
+import {
+  useAppDispatch,
+  useAppSelector,
+  setCurrentDate as setCurrentDateAction,
+  setSelectedDate as setSelectedDateAction,
+  setViewMode as setViewModeAction,
+  setActiveFilters as setActiveFiltersAction,
+  toggleFilter as toggleFilterAction,
+  setUse24Hour as setUse24HourAction,
+  setIsDarkMode as setIsDarkModeAction,
+  setDayViewType as setDayViewTypeAction,
+  setShowDayTimeline as setShowDayTimelineAction,
+  setIsModalOpen as setIsModalOpenAction,
+  setEditingEvent as setEditingEventAction,
+  setIsSubmitting as setIsSubmittingAction,
+  setSearchQuery as setSearchQueryAction,
+  openAddModal as openAddModalAction,
+  openEditModal as openEditModalAction,
+  closeModal as closeModalAction,
+  goToToday as goToTodayAction,
+  navigateForward,
+  navigateBackward,
+  setNavigationDirection,
+} from "./store";
 
 const CalendarContext = createContext<CalendarContextValue | null>(null);
 
@@ -52,8 +75,8 @@ type CalendarProviderProps = {
     endDate: Date;
     signal?: AbortSignal;
   }) => Promise<void>;
-  // Configuration
-  config?: EventCalendarConfig;
+  // Configuration (already merged)
+  config: Required<EventCalendarConfig>;
 };
 
 export function CalendarProvider({
@@ -64,98 +87,64 @@ export function CalendarProvider({
   onEventUpdate,
   onEventDelete,
   onDateRangeChange,
-  config: userConfig,
+  config,
 }: CalendarProviderProps) {
-  // Merge config with defaults
-  const config: Required<EventCalendarConfig> = {
-    ...DEFAULT_CONFIG,
-    ...userConfig,
-    dayView: {
-      ...DEFAULT_CONFIG.dayView,
-      ...userConfig?.dayView,
-    },
-    weekView: {
-      ...DEFAULT_CONFIG.weekView,
-      ...userConfig?.weekView,
-    },
-    monthView: {
-      ...DEFAULT_CONFIG.monthView,
-      ...userConfig?.monthView,
-    },
-    yearView: {
-      ...DEFAULT_CONFIG.yearView,
-      ...userConfig?.yearView,
-    },
-  };
+  const dispatch = useAppDispatch();
 
-  // Date state
-  const [currentDate, setCurrentDateState] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
-  const [navigationDirection, setNavigationDirection] = useState<
-    "forward" | "backward" | null
-  >(null);
-
-  // View state
-  const [viewMode, setViewModeState] = useState<ViewMode>(config.defaultView);
-
-  // Filtering
-  const [activeFilters, setActiveFilters] = useState<EventColor[]>([
-    "blue",
-    "green",
-    "yellow",
-    "purple",
-    "red",
-  ]);
-
-  // Settings
-  const [use24Hour, setUse24Hour] = useState(config.use24HourFormatByDefault);
-  const [isDarkMode, setIsDarkModeState] = useState(true);
-
-  // Day view settings
-  const [dayViewType, setDayViewType] = useState<"regular" | "resource">(
-    config.dayView.viewType ?? "regular"
+  // Read state from Redux
+  const currentDateISO = useAppSelector((state) => state.calendar.currentDate);
+  const selectedDateISO = useAppSelector((state) => state.calendar.selectedDate);
+  const navigationDirection = useAppSelector(
+    (state) => state.calendar.navigationDirection
   );
-  const [showDayTimeline, setShowDayTimeline] = useState(
-    !config.dayView.hideTimeline
+  const viewMode = useAppSelector((state) => state.calendar.viewMode);
+  const dayViewType = useAppSelector((state) => state.calendar.dayViewType);
+  const showDayTimeline = useAppSelector(
+    (state) => state.calendar.showDayTimeline
   );
+  const isModalOpen = useAppSelector((state) => state.calendar.isModalOpen);
+  const editingEvent = useAppSelector((state) => state.calendar.editingEvent);
+  const isSubmitting = useAppSelector((state) => state.calendar.isSubmitting);
+  const searchQuery = useAppSelector((state) => state.calendar.searchQuery);
+  const activeFilters = useAppSelector((state) => state.calendar.activeFilters);
+  const use24Hour = useAppSelector((state) => state.calendar.use24Hour);
+  const isDarkMode = useAppSelector((state) => state.calendar.isDarkMode);
 
-  // Sync day view settings with config when it changes
-  useEffect(() => {
-    setDayViewType(config.dayView.viewType ?? "regular");
-  }, [config.dayView.viewType]);
-
-  useEffect(() => {
-    setShowDayTimeline(!config.dayView.hideTimeline);
-  }, [config.dayView.hideTimeline]);
-
-  // Modal state
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
-  const [modalInitialDate, setModalInitialDate] = useState<Date | null>(null);
-
-  // Submitting state
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Search
-  const [searchQuery, setSearchQuery] = useState("");
+  // Memoize Date objects to prevent unnecessary re-renders
+  const currentDate = useMemo(
+    () => new Date(currentDateISO),
+    [currentDateISO]
+  );
+  const selectedDate = useMemo(
+    () => (selectedDateISO ? new Date(selectedDateISO) : null),
+    [selectedDateISO]
+  );
 
   // Abort controller for date range changes
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Dark mode effect
-  const setIsDarkMode = useCallback((value: boolean) => {
-    setIsDarkModeState(value);
+  // Dark mode effect - sync with DOM
+  useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark", value);
+      document.documentElement.classList.toggle("dark", isDarkMode);
     }
-  }, []);
+  }, [isDarkMode]);
 
-  // Initialize dark mode
+  // Initialize dark mode on mount
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.documentElement.classList.add("dark");
     }
   }, []);
+
+  // Sync day view settings with config when it changes
+  useEffect(() => {
+    dispatch(setDayViewTypeAction(config.dayView.viewType ?? "regular"));
+  }, [config.dayView.viewType, dispatch]);
+
+  useEffect(() => {
+    dispatch(setShowDayTimelineAction(!config.dayView.hideTimeline));
+  }, [config.dayView.hideTimeline, dispatch]);
 
   // Calculate date range based on view and call onDateRangeChange
   const triggerDateRangeChange = useCallback(
@@ -171,8 +160,12 @@ export function CalendarProvider({
 
       switch (view) {
         case "month":
-          startDate = startOfWeek(startOfMonth(date), { weekStartsOn: config.weekStartsOn });
-          endDate = endOfWeek(endOfMonth(date), { weekStartsOn: config.weekStartsOn });
+          startDate = startOfWeek(startOfMonth(date), {
+            weekStartsOn: config.weekStartsOn,
+          });
+          endDate = endOfWeek(endOfMonth(date), {
+            weekStartsOn: config.weekStartsOn,
+          });
           break;
         case "week":
           startDate = startOfWeek(date, { weekStartsOn: config.weekStartsOn });
@@ -218,124 +211,132 @@ export function CalendarProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Set date with direction tracking
+  // Set date
   const setCurrentDate = useCallback(
     (date: Date) => {
-      setCurrentDateState(date);
+      dispatch(setCurrentDateAction(date.toISOString()));
     },
-    []
+    [dispatch]
+  );
+
+  // Set selected date
+  const setSelectedDate = useCallback(
+    (date: Date | null) => {
+      dispatch(setSelectedDateAction(date ? date.toISOString() : null));
+    },
+    [dispatch]
   );
 
   // Set view mode and trigger date range change
   const setViewMode = useCallback(
     (mode: ViewMode) => {
-      setViewModeState(mode);
-      setNavigationDirection(null);
+      dispatch(setViewModeAction(mode));
       triggerDateRangeChange(currentDate, mode);
     },
-    [currentDate, triggerDateRangeChange]
+    [dispatch, currentDate, triggerDateRangeChange]
   );
 
   // Navigation functions
   const goToToday = useCallback(() => {
     const today = new Date();
-    setNavigationDirection(null);
-    setCurrentDateState(today);
-    setSelectedDate(today);
+    dispatch(goToTodayAction());
     triggerDateRangeChange(today, viewMode);
-  }, [viewMode, triggerDateRangeChange]);
+  }, [dispatch, viewMode, triggerDateRangeChange]);
 
   const goToNextPeriod = useCallback(() => {
-    setNavigationDirection("forward");
-    setCurrentDateState((prev) => {
-      let newDate: Date;
-      switch (viewMode) {
-        case "month":
-          newDate = addMonths(prev, 1);
-          break;
-        case "week":
-          newDate = addWeeks(prev, 1);
-          break;
-        case "day":
-          newDate = addDays(prev, 1);
-          break;
-        case "year":
-          newDate = new Date(prev.getFullYear() + 1, prev.getMonth(), prev.getDate());
-          break;
-        case "list":
-          newDate = addMonths(prev, 1);
-          break;
-        default:
-          newDate = prev;
-      }
-      triggerDateRangeChange(newDate, viewMode);
-      return newDate;
-    });
-  }, [viewMode, triggerDateRangeChange]);
+    let newDate: Date;
+    switch (viewMode) {
+      case "month":
+        newDate = addMonths(currentDate, 1);
+        break;
+      case "week":
+        newDate = addWeeks(currentDate, 1);
+        break;
+      case "day":
+        newDate = addDays(currentDate, 1);
+        break;
+      case "year":
+        newDate = new Date(
+          currentDate.getFullYear() + 1,
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        break;
+      case "list":
+        newDate = addMonths(currentDate, 1);
+        break;
+      default:
+        newDate = currentDate;
+    }
+    dispatch(navigateForward(newDate.toISOString()));
+    triggerDateRangeChange(newDate, viewMode);
+  }, [dispatch, viewMode, currentDate, triggerDateRangeChange]);
 
   const goToPrevPeriod = useCallback(() => {
-    setNavigationDirection("backward");
-    setCurrentDateState((prev) => {
-      let newDate: Date;
-      switch (viewMode) {
-        case "month":
-          newDate = subMonths(prev, 1);
-          break;
-        case "week":
-          newDate = subWeeks(prev, 1);
-          break;
-        case "day":
-          newDate = subDays(prev, 1);
-          break;
-        case "year":
-          newDate = new Date(prev.getFullYear() - 1, prev.getMonth(), prev.getDate());
-          break;
-        case "list":
-          newDate = subMonths(prev, 1);
-          break;
-        default:
-          newDate = prev;
-      }
-      triggerDateRangeChange(newDate, viewMode);
-      return newDate;
-    });
-  }, [viewMode, triggerDateRangeChange]);
+    let newDate: Date;
+    switch (viewMode) {
+      case "month":
+        newDate = subMonths(currentDate, 1);
+        break;
+      case "week":
+        newDate = subWeeks(currentDate, 1);
+        break;
+      case "day":
+        newDate = subDays(currentDate, 1);
+        break;
+      case "year":
+        newDate = new Date(
+          currentDate.getFullYear() - 1,
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        break;
+      case "list":
+        newDate = subMonths(currentDate, 1);
+        break;
+      default:
+        newDate = currentDate;
+    }
+    dispatch(navigateBackward(newDate.toISOString()));
+    triggerDateRangeChange(newDate, viewMode);
+  }, [dispatch, viewMode, currentDate, triggerDateRangeChange]);
 
   const goToMonth = useCallback(
     (month: number) => {
-      setNavigationDirection(null);
-      setCurrentDateState((prev) => {
-        const newDate = new Date(prev);
-        newDate.setMonth(month);
-        triggerDateRangeChange(newDate, viewMode);
-        return newDate;
-      });
+      const newDate = new Date(currentDate);
+      newDate.setMonth(month);
+      dispatch(setNavigationDirection(null));
+      dispatch(setCurrentDateAction(newDate.toISOString()));
+      triggerDateRangeChange(newDate, viewMode);
     },
-    [viewMode, triggerDateRangeChange]
+    [dispatch, currentDate, viewMode, triggerDateRangeChange]
   );
 
   const goToYear = useCallback(
     (year: number) => {
-      setNavigationDirection(null);
-      setCurrentDateState((prev) => {
-        const newDate = new Date(prev);
-        newDate.setFullYear(year);
-        triggerDateRangeChange(newDate, viewMode);
-        return newDate;
-      });
+      const newDate = new Date(currentDate);
+      newDate.setFullYear(year);
+      dispatch(setNavigationDirection(null));
+      dispatch(setCurrentDateAction(newDate.toISOString()));
+      triggerDateRangeChange(newDate, viewMode);
     },
-    [viewMode, triggerDateRangeChange]
+    [dispatch, currentDate, viewMode, triggerDateRangeChange]
   );
 
   // Event filtering
-  const toggleFilter = useCallback((color: EventColor) => {
-    setActiveFilters((prev) => {
-      if (prev.includes(color)) {
-        return prev.filter((c) => c !== color);
-      }
-      return [...prev, color];
-    });
-  }, []);
+  const toggleFilter = useCallback(
+    (color: EventColor) => {
+      dispatch(toggleFilterAction(color));
+    },
+    [dispatch]
+  );
+
+  const setActiveFilters = useCallback(
+    (filters: EventColor[]) => {
+      dispatch(setActiveFiltersAction(filters));
+    },
+    [dispatch]
+  );
 
   // Get events for a specific date
   const getEventsForDate = useCallback(
@@ -373,63 +374,114 @@ export function CalendarProvider({
     [events, activeFilters]
   );
 
+  // Modal functions
+  const openAddModal = useCallback(
+    (date?: Date) => {
+      dispatch(openAddModalAction({ date: date?.toISOString() }));
+    },
+    [dispatch]
+  );
+
+  const openEditModal = useCallback(
+    (event: CalendarEvent) => {
+      dispatch(openEditModalAction(event));
+    },
+    [dispatch]
+  );
+
+  const closeModal = useCallback(() => {
+    dispatch(closeModalAction());
+  }, [dispatch]);
+
+  const setIsModalOpen = useCallback(
+    (open: boolean) => {
+      dispatch(setIsModalOpenAction(open));
+    },
+    [dispatch]
+  );
+
+  const setEditingEvent = useCallback(
+    (event: CalendarEvent | null) => {
+      dispatch(setEditingEventAction(event));
+    },
+    [dispatch]
+  );
+
   // Event handlers that call external props
   const handleEventAdd = useCallback(
     async (event: NewCalendarEvent) => {
-      setIsSubmitting(true);
+      dispatch(setIsSubmittingAction(true));
       try {
         await onEventAdd(event);
         closeModal();
       } finally {
-        setIsSubmitting(false);
+        dispatch(setIsSubmittingAction(false));
       }
     },
-    [onEventAdd]
+    [dispatch, onEventAdd, closeModal]
   );
 
   const handleEventUpdate = useCallback(
     async (event: CalendarEvent) => {
-      setIsSubmitting(true);
+      dispatch(setIsSubmittingAction(true));
       try {
         await onEventUpdate(event);
         closeModal();
       } finally {
-        setIsSubmitting(false);
+        dispatch(setIsSubmittingAction(false));
       }
     },
-    [onEventUpdate]
+    [dispatch, onEventUpdate, closeModal]
   );
 
   const handleEventDelete = useCallback(
     async (eventId: string) => {
-      setIsSubmitting(true);
+      dispatch(setIsSubmittingAction(true));
       try {
         await onEventDelete(eventId);
         closeModal();
       } finally {
-        setIsSubmitting(false);
+        dispatch(setIsSubmittingAction(false));
       }
     },
-    [onEventDelete]
+    [dispatch, onEventDelete, closeModal]
   );
 
-  // Modal functions
-  const openAddModal = useCallback((date?: Date) => {
-    setEditingEvent(null);
-    setModalInitialDate(date || new Date());
-    setIsModalOpen(true);
-  }, []);
+  // Settings setters
+  const setUse24Hour = useCallback(
+    (value: boolean) => {
+      dispatch(setUse24HourAction(value));
+    },
+    [dispatch]
+  );
 
-  const openEditModal = useCallback((event: CalendarEvent) => {
-    setEditingEvent(event);
-    setIsModalOpen(true);
-  }, []);
+  const setIsDarkMode = useCallback(
+    (value: boolean) => {
+      dispatch(setIsDarkModeAction(value));
+    },
+    [dispatch]
+  );
 
-  const closeModal = useCallback(() => {
-    setIsModalOpen(false);
-    setEditingEvent(null);
-    setModalInitialDate(null);
-  }, []);
+  const setDayViewType = useCallback(
+    (type: "regular" | "resource") => {
+      dispatch(setDayViewTypeAction(type));
+    },
+    [dispatch]
+  );
+
+  const setShowDayTimeline = useCallback(
+    (show: boolean) => {
+      dispatch(setShowDayTimelineAction(show));
+    },
+    [dispatch]
+  );
+
+  const setSearchQuery = useCallback(
+    (query: string) => {
+      dispatch(setSearchQueryAction(query));
+    },
+    [dispatch]
+  );
 
   const value: CalendarContextValue = {
     currentDate,
